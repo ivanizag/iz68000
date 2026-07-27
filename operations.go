@@ -556,7 +556,6 @@ func buildOpBranch(condition int) opFunc {
 
 func opBSR(s *State, ir uint16, op *opcode) {
 	target := s.fetchDisplacement(ir)
-	s.checkJumpTarget(target)
 	s.push(s.reg.getPC(), sizeLong)
 	s.jump(target)
 }

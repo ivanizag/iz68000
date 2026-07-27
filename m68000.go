@@ -199,6 +199,122 @@ func opcodeDefs68000() []opcodeDef {
 			cycles: 4, action: opILLEGAL},
 
 		/*
+			Multiple register transfers. The word after the opcode has the
+			mask of the registers to move.
+		*/
+		{name: "MOVEM", pattern: "0100100010mmmrrr", size: sizeWord, ea: eaMovemToMemory,
+			timing: timingEA, operands: operandsMovemToMemory, cycles: 8,
+			action: buildOpMOVEMToMemory(sizeWord)},
+		{name: "MOVEM", pattern: "0100100011mmmrrr", size: sizeLong, ea: eaMovemToMemory,
+			timing: timingEA, operands: operandsMovemToMemory, cycles: 8,
+			action: buildOpMOVEMToMemory(sizeLong)},
+		{name: "MOVEM", pattern: "0100110010mmmrrr", size: sizeWord, ea: eaMovemToRegister,
+			timing: timingEA, operands: operandsMovemToReg, cycles: 12,
+			action: buildOpMOVEMToRegister(sizeWord)},
+		{name: "MOVEM", pattern: "0100110011mmmrrr", size: sizeLong, ea: eaMovemToRegister,
+			timing: timingEA, operands: operandsMovemToReg, cycles: 12,
+			action: buildOpMOVEMToRegister(sizeLong)},
+
+		/*
+			MOVEP reaches the peripherals wired to half of the data bus
+		*/
+		{name: "MOVEP", pattern: "0000nnn100001nnn", size: sizeWord,
+			operands: operandsMovepToReg, cycles: 16, build: buildMOVEP(false)},
+		{name: "MOVEP", pattern: "0000nnn101001nnn", size: sizeLong,
+			operands: operandsMovepToReg, cycles: 24, build: buildMOVEP(false)},
+		{name: "MOVEP", pattern: "0000nnn110001nnn", size: sizeWord,
+			operands: operandsMovepToMemory, cycles: 16, build: buildMOVEP(true)},
+		{name: "MOVEP", pattern: "0000nnn111001nnn", size: sizeLong,
+			operands: operandsMovepToMemory, cycles: 24, build: buildMOVEP(true)},
+
+		/*
+			Multiply and divide. The cycles are data dependent, the ones of
+			the divisions are the worst case.
+		*/
+		{name: "MULU", pattern: "1100nnn011mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToDataReg, cycles: 38,
+			action: buildOpMultiply(false)},
+		{name: "MULS", pattern: "1100nnn111mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToDataReg, cycles: 38,
+			action: buildOpMultiply(true)},
+		{name: "DIVU", pattern: "1000nnn011mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToDataReg, cycles: 140,
+			action: buildOpDivide(false)},
+		{name: "DIVS", pattern: "1000nnn111mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToDataReg, cycles: 158,
+			action: buildOpDivide(true)},
+
+		/*
+			Decimal arithmetic
+		*/
+		{name: "ABCD", pattern: "1100nnn10000xnnn", size: sizeByte,
+			operands: operandsExtended, cycles: 6, action: opABCD},
+		{name: "SBCD", pattern: "1000nnn10000xnnn", size: sizeByte,
+			operands: operandsExtended, cycles: 6, action: opSBCD},
+		{name: "NBCD", pattern: "0100100000mmmrrr", size: sizeByte, ea: eaDataAlterable,
+			timing: timingEA, operands: operandsEA, cycles: 6, rmw: true, action: opNBCD},
+
+		/*
+			Multiprecision arithmetic. The bit 3 selects between two data
+			registers and two predecremented addresses.
+		*/
+		{name: "ADDX", pattern: "1101nnn1ss00xnnn", operands: operandsExtended,
+			cycles: 4, cyclesL: 8, build: buildExtended(true)},
+		{name: "SUBX", pattern: "1001nnn1ss00xnnn", operands: operandsExtended,
+			cycles: 4, cyclesL: 8, build: buildExtended(false)},
+		{name: "CMPM", pattern: "1011nnn1ss001nnn", operands: operandsCmpm,
+			cycles: 12, cyclesL: 20, build: buildOpCMPM},
+
+		/*
+			Miscellaneous
+		*/
+		{name: "CHK", pattern: "0100nnn110mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToDataReg, cycles: 10, action: opCHK},
+		{name: "TAS", pattern: "0100101011mmmrrr", size: sizeByte, ea: eaDataAlterable,
+			timing: timingEA, operands: operandsEA, cycles: 4, rmw: true, action: opTAS},
+		{name: "EXG", pattern: "1100nnn101000nnn", size: sizeLong, operands: operandsExg,
+			cycles: 6, action: buildOpEXG(regD0, regD0)},
+		{name: "EXG", pattern: "1100nnn101001nnn", size: sizeLong, operands: operandsExg,
+			cycles: 6, action: buildOpEXG(regA0, regA0)},
+		{name: "EXG", pattern: "1100nnn110001nnn", size: sizeLong, operands: operandsExg,
+			cycles: 6, action: buildOpEXG(regD0, regA0)},
+
+		/*
+			Access to the status register. MOVE from SR is not privileged on
+			the 68000, it became so on the 68010.
+		*/
+		{name: "MOVE", pattern: "0100000011mmmrrr", size: sizeWord, ea: eaDataAlterable,
+			timing: timingEA, operands: operandsSRToEA, cycles: 6, rmw: true,
+			action: opMOVEfromSR},
+		{name: "MOVE", pattern: "0100010011mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToCCR, cycles: 12, action: opMOVEtoCCR},
+		{name: "MOVE", pattern: "0100011011mmmrrr", size: sizeWord, ea: eaData,
+			timing: timingEA, operands: operandsEAToSR, cycles: 12, action: opMOVEtoSR},
+		{name: "MOVE", pattern: "0100111001100nnn", size: sizeLong,
+			operands: operandsRegToUSP, cycles: 4, action: opMOVEtoUSP},
+		{name: "MOVE", pattern: "0100111001101nnn", size: sizeLong,
+			operands: operandsUSPToReg, cycles: 4, action: opMOVEfromUSP},
+
+		{name: "ORI", pattern: "0000000000111100", size: sizeByte,
+			operands: operandsImmediateToCCR, cycles: 20,
+			action: buildOpImmediateToCCR(operationOr)},
+		{name: "ORI", pattern: "0000000001111100", size: sizeWord,
+			operands: operandsImmediateToSR, cycles: 20,
+			action: buildOpImmediateToSR(operationOr)},
+		{name: "ANDI", pattern: "0000001000111100", size: sizeByte,
+			operands: operandsImmediateToCCR, cycles: 20,
+			action: buildOpImmediateToCCR(operationAnd)},
+		{name: "ANDI", pattern: "0000001001111100", size: sizeWord,
+			operands: operandsImmediateToSR, cycles: 20,
+			action: buildOpImmediateToSR(operationAnd)},
+		{name: "EORI", pattern: "0000101000111100", size: sizeByte,
+			operands: operandsImmediateToCCR, cycles: 20,
+			action: buildOpImmediateToCCR(operationEor)},
+		{name: "EORI", pattern: "0000101001111100", size: sizeWord,
+			operands: operandsImmediateToSR, cycles: 20,
+			action: buildOpImmediateToSR(operationEor)},
+
+		/*
 			The unimplemented instruction ranges. The Macintosh uses the line
 			A traps for all the toolbox and operating system calls.
 		*/

@@ -67,30 +67,39 @@ master pointers.
 
 ## Status
 
-Implemented, 76% of the opcode words:
+All the 68000 instructions are implemented, 82% of the 65536 opcode words:
 
-MOVE, MOVEA, MOVEQ, LEA, PEA, EXT, SWAP, ORI, ANDI, SUBI, ADDI, EORI, CMPI,
-ADDQ, SUBQ, OR, AND, SUB, ADD, CMP, EOR, SUBA, ADDA, CMPA, NEGX, CLR, NEG,
-NOT, TST, BTST, BCHG, BCLR, BSET, ASL, ASR, LSL, LSR, ROL, ROR, ROXL, ROXR,
-Bcc, BRA, BSR, DBcc, Scc, JMP, JSR, RTS, RTR, RTE, LINK, UNLK, TRAP, TRAPV,
-NOP, RESET, STOP, ILLEGAL and the line A and line F traps.
+MOVE, MOVEA, MOVEQ, MOVEM, MOVEP, LEA, PEA, EXT, SWAP, EXG, LINK, UNLK, ORI,
+ANDI, SUBI, ADDI, EORI, CMPI, ADDQ, SUBQ, OR, AND, SUB, ADD, CMP, EOR, SUBA,
+ADDA, CMPA, ADDX, SUBX, CMPM, MULU, MULS, DIVU, DIVS, ABCD, SBCD, NBCD, NEGX,
+CLR, NEG, NOT, TST, TAS, CHK, BTST, BCHG, BCLR, BSET, ASL, ASR, LSL, LSR, ROL,
+ROR, ROXL, ROXR, Bcc, BRA, BSR, DBcc, Scc, JMP, JSR, RTS, RTR, RTE, TRAP,
+TRAPV, NOP, RESET, STOP, ILLEGAL, MOVE to and from SR, CCR and USP, the ORI,
+ANDI and EORI variants that reach CCR and SR, and the line A and line F traps
+that the Macintosh uses for the toolbox calls.
 
-Not implemented yet:
-
-MOVEM, MOVEP, MULU, MULS, DIVU, DIVS, ABCD, SBCD, NBCD, ADDX, SUBX, CMPM,
-CHK, TAS, EXG, MOVE to/from SR, MOVE to CCR, MOVE to/from USP, ORI/ANDI/EORI
-to CCR and to SR.
+The remaining opcode words are the encodings that are illegal on the 68000.
 
 The cycle counts are the base times of the manual plus the effective address
 calculation times. They are not exact yet for the operands on address
-registers and for some of the long variants.
+registers, for some of the long variants and for the divisions, where the
+worst case is used.
 
-Against a sample of 35 test files, 86963 of 87239 scenarios pass. The 276
-failures are all MOVE.L aborted by an address error on the destination, where
-the order in which the two halves of the long are written decides which flags
-are already committed. That, and three of the seven words of the group 0
-exception frame, are the prefetch queue of the real processor showing through
-and are out of reach of an emulator with instruction level timing.
+## Accuracy
+
+Against the whole test suite, 311787 of 315000 scenarios pass. The 3213 that
+do not fall in three groups, all of them documented on `harteSuite_test.go`:
+
+- The V flag of ABCD, SBCD and NBCD, that the manual leaves undefined.
+- MOVE.L, ADDX.L, SUBX.L and CMPM.L aborted by an address error on their
+  second operand, where which half of the long was transferred first decides
+  what has already been committed.
+- Three of the seven words of the group 0 exception frame.
+
+The last two are the prefetch queue and the bus cycles of the real processor
+showing through when an address error aborts an instruction, out of reach of
+an emulator with instruction level timing. The tests of STOP are skipped, its
+final states can't be reached by executing a single instruction.
 
 ## Tests
 

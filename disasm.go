@@ -24,6 +24,20 @@ const (
 	operandsLink           // An,#<displacement>
 	operandsTrap           // #<vector>
 	operandsStop           // #<data>
+	operandsMovemToMemory  // <register list>,<ea>
+	operandsMovemToReg     // <ea>,<register list>
+	operandsMovepToMemory  // Dn,(d16,An)
+	operandsMovepToReg     // (d16,An),Dn
+	operandsExtended       // Dy,Dx or -(Ay),-(Ax)
+	operandsCmpm           // (Ay)+,(Ax)+
+	operandsExg            // Rx,Ry
+	operandsImmediateToCCR // #<data>,CCR
+	operandsImmediateToSR  // #<data>,SR
+	operandsEAToCCR        // <ea>,CCR
+	operandsEAToSR         // <ea>,SR
+	operandsSRToEA         // SR,<ea>
+	operandsRegToUSP       // An,USP
+	operandsUSPToReg       // USP,An
 )
 
 // operandsString disassembles an instruction, advancing pc over the extension
@@ -118,6 +132,56 @@ func (s *State) operandsString(ir uint16, op *opcode, pc *uint32) string {
 	case operandsStop:
 		operands = fmt.Sprintf("#$%04x", s.nextWord(pc))
 
+	case operandsMovemToMemory:
+		list := registerListString(s.nextWord(pc), eaMode(ir) == modeIndirectPredecrement)
+		operands = fmt.Sprintf("%s,%s",
+			list, s.operandString(eaMode(ir), eaReg(ir), op.size, pc))
+
+	case operandsMovemToReg:
+		list := registerListString(s.nextWord(pc), false)
+		operands = fmt.Sprintf("%s,%s",
+			s.operandString(eaMode(ir), eaReg(ir), op.size, pc), list)
+
+	case operandsMovepToMemory:
+		operands = fmt.Sprintf("D%d,($%x,A%d)", opReg(ir), s.nextWord(pc), eaReg(ir))
+
+	case operandsMovepToReg:
+		operands = fmt.Sprintf("($%x,A%d),D%d", s.nextWord(pc), eaReg(ir), opReg(ir))
+
+	case operandsExtended:
+		if ir&0x0008 == 0 {
+			operands = fmt.Sprintf("D%d,D%d", eaReg(ir), opReg(ir))
+		} else {
+			operands = fmt.Sprintf("-(A%d),-(A%d)", eaReg(ir), opReg(ir))
+		}
+
+	case operandsCmpm:
+		operands = fmt.Sprintf("(A%d)+,(A%d)+", eaReg(ir), opReg(ir))
+
+	case operandsExg:
+		operands = fmt.Sprintf("%s,%s", exgRegisterName(ir, true), exgRegisterName(ir, false))
+
+	case operandsImmediateToCCR:
+		operands = fmt.Sprintf("#$%x,CCR", s.nextWord(pc))
+
+	case operandsImmediateToSR:
+		operands = fmt.Sprintf("#$%x,SR", s.nextWord(pc))
+
+	case operandsEAToCCR:
+		operands = s.operandString(eaMode(ir), eaReg(ir), sizeWord, pc) + ",CCR"
+
+	case operandsEAToSR:
+		operands = s.operandString(eaMode(ir), eaReg(ir), sizeWord, pc) + ",SR"
+
+	case operandsSRToEA:
+		operands = "SR," + s.operandString(eaMode(ir), eaReg(ir), sizeWord, pc)
+
+	case operandsRegToUSP:
+		operands = fmt.Sprintf("A%d,USP", eaReg(ir))
+
+	case operandsUSPToReg:
+		operands = fmt.Sprintf("USP,A%d", eaReg(ir))
+
 	default:
 		operands = "UNKNOWN OPERANDS"
 	}
@@ -126,6 +190,80 @@ func (s *State) operandsString(ir uint16, op *opcode, pc *uint32) string {
 		return mnemonic
 	}
 	return fmt.Sprintf("%-8s %s", mnemonic, operands)
+}
+
+// registerListString expands the mask of MOVEM, collapsing the runs of
+// consecutive registers into ranges. The predecrement mode reverses the order
+// of the bits.
+func registerListString(mask uint16, reversed bool) string {
+	names := ""
+	for i := 0; i < regCount; {
+		bit := i
+		if reversed {
+			bit = regCount - 1 - i
+		}
+		if mask&(1<<bit) == 0 {
+			i++
+			continue
+		}
+
+		// Find how far the run of consecutive registers goes, without
+		// crossing from the data to the address registers
+		last := i
+		for last+1 < regCount && last+1 != regA0 {
+			next := last + 1
+			if reversed {
+				next = regCount - 1 - (last + 1)
+			}
+			if mask&(1<<next) == 0 {
+				break
+			}
+			last++
+		}
+
+		if names != "" {
+			names += "/"
+		}
+		names += registerName(i)
+		if last > i {
+			names += "-" + registerName(last)
+		}
+		i = last + 1
+	}
+
+	if names == "" {
+		return "#0"
+	}
+	return names
+}
+
+func registerName(i int) string {
+	if i < regA0 {
+		return fmt.Sprintf("D%d", i)
+	}
+	return fmt.Sprintf("A%d", i-regA0)
+}
+
+// The opmode field of EXG, that tells which of the two registers are data
+// registers and which are address ones
+const (
+	exgDataData       = 0x28 // 101000
+	exgAddressAddress = 0x29 // 101001
+	exgDataAddress    = 0x31 // 110001
+)
+
+func exgRegisterName(ir uint16, first bool) string {
+	opmode := ir >> 3 & 0x3f
+	if first {
+		if opmode == exgAddressAddress {
+			return fmt.Sprintf("A%d", opReg(ir))
+		}
+		return fmt.Sprintf("D%d", opReg(ir))
+	}
+	if opmode == exgDataData {
+		return fmt.Sprintf("D%d", eaReg(ir))
+	}
+	return fmt.Sprintf("A%d", eaReg(ir))
 }
 
 // branchTarget resolves the displacement of Bcc, BRA and BSR. A zero byte

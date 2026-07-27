@@ -35,6 +35,10 @@ const (
 	eaDataAlterable    // Data and alterable
 	eaMemoryAlterable  // Memory and alterable
 	eaControlAlterable // Control and alterable
+
+	// The two combinations used only by MOVEM
+	eaMovemToMemory   // Control alterable plus predecrement
+	eaMovemToRegister // Control plus postincrement
 )
 
 // operand is the result of resolving an effective address. The address of the
@@ -46,10 +50,11 @@ type operand struct {
 	address uint32 // For the memory modes
 	value   uint32 // For the immediate mode
 
-	// Postincrement pending until the transfer succeeds. The predecrement is
-	// part of the address calculation and is applied right away, this one is
-	// committed by readOperand() and writeOperand().
-	increment uint32
+	// The increment and decrement modes update the address register, but not
+	// always at the same point of the transfer. The update is left pending
+	// here and committed by readOperand() or writeOperand().
+	pending      bool
+	pendingValue uint32
 }
 
 // resolveOperand decodes an effective address, consuming the extension words
@@ -65,8 +70,10 @@ func (s *State) resolveOperand(mode int, reg int, size int) operand {
 		o.address = s.reg.getA(reg)
 	case modeIndirectPostincrement:
 		o.address = s.reg.getA(reg)
-		o.increment = stackAdjust(reg, size)
+		o.pending, o.pendingValue = true, o.address+stackAdjust(reg, size)
 	case modeIndirectPredecrement:
+		// The decrement is part of the address calculation and is committed
+		// right away, even if the transfer then raises an address error
 		o.address = s.reg.getA(reg) - stackAdjust(reg, size)
 		s.reg.setA(reg, o.address)
 	case modeIndirectDisplacement:
@@ -139,13 +146,13 @@ func (s *State) readOperand(o *operand, size int) uint32 {
 	}
 
 	if size != sizeLong {
-		// A byte or a word is read on a single bus cycle, with the register
-		// already written back when an address error aborts it. A long takes
-		// two cycles and is written back only after both.
-		s.commitIncrement(o)
+		// A byte or a word is read on a single bus cycle, with the address
+		// register already written back when an address error aborts it. A
+		// long takes two cycles and is written back only after both.
+		s.commitAddressRegister(o)
 	}
 	value := s.peekSized(o.address, size)
-	s.commitIncrement(o)
+	s.commitAddressRegister(o)
 	return value
 }
 
@@ -158,16 +165,17 @@ func (s *State) writeOperand(o *operand, size int, value uint32) {
 		s.reg.setA(o.reg, signExtend(value, size))
 	default:
 		s.pokeSized(o.address, size, value)
-		s.commitIncrement(o)
+		s.commitAddressRegister(o)
 	}
 }
 
-// commitIncrement applies the pending postincrement. The read-modify-write
-// instructions access the same operand twice, it must be applied only once.
-func (s *State) commitIncrement(o *operand) {
-	if o.increment != 0 {
-		s.reg.setA(o.reg, s.reg.getA(o.reg)+o.increment)
-		o.increment = 0
+// commitAddressRegister applies the pending update of the increment and
+// decrement modes. The read-modify-write instructions access the same operand
+// twice, it must be applied only once.
+func (s *State) commitAddressRegister(o *operand) {
+	if o.pending {
+		s.reg.setA(o.reg, o.pendingValue)
+		o.pending = false
 	}
 }
 
@@ -203,6 +211,10 @@ func isValidEA(kind int, mode int, reg int) bool {
 		return isMemory && isAlterable
 	case eaControlAlterable:
 		return isControl && isAlterable
+	case eaMovemToMemory:
+		return isControl && isAlterable || mode == modeIndirectPredecrement
+	case eaMovemToRegister:
+		return isControl || mode == modeIndirectPostincrement
 	}
 	return false
 }

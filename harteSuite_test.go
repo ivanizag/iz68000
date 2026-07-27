@@ -16,12 +16,19 @@ package iz68000
 	Know issues:
 		- The cycle counts are not verified yet (Note 1)
 		- Part of the frame pushed by the group 0 exceptions (Note 2)
-		- MOVE.L aborted by an address error on the destination (Note 3)
-		- TAS and TRAPV are documented as not good on the repo itself
+		- MOVE.L, ADDX.L, SUBX.L and CMPM.L aborted by an address error on
+		  their second operand (Note 3)
+		- The tests of STOP are skipped (Note 4)
+		- The N and V flags of ABCD, SBCD and NBCD (Note 5)
 
 	Notes 2 and 3 are both the prefetch queue and the bus cycles of the real
 	processor showing through when an address error aborts an instruction. An
 	emulator with instruction level timing can't reproduce them.
+
+	Note 5: the manual leaves N and V undefined for the decimal instructions,
+	the V here does not always agree with the microcode of MAME. A handful of
+	SBCD scenarios also differ on the result itself, all of them with operands
+	holding digits above 9, which is not valid decimal input.
 
 	Each test is dispatched using the opcode on the prefetch queue, the tests
 	of the instructions not implemented yet are skipped.
@@ -46,6 +53,13 @@ The tests set the program counter with the m_au register of MAME, the address
 of the next prefetch. It is 4 bytes ahead of the instruction being executed.
 */
 const prefetchAhead = 4
+
+// Note 4: the final states of STOP can't be reached by executing a single
+// instruction, the processor is halted there and the tests carry on to
+// whatever woke it up.
+var skippedFiles = map[string]bool{
+	"STOP.json.bin": true,
+}
 
 type scenarioState struct {
 	d        [8]uint32
@@ -81,7 +95,11 @@ func TestHarteM68000(t *testing.T) {
 
 	for _, file := range files {
 		file := file
-		t.Run(filepath.Base(file), func(t *testing.T) {
+		name := filepath.Base(file)
+		if skippedFiles[name] {
+			continue // Note 4
+		}
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			testFile(t, file)
 		})

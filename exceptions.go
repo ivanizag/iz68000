@@ -90,6 +90,20 @@ func exceptionCycles(vector int) int {
 	return 34
 }
 
+/*
+exceptionPC returns the program counter to save on the frame. The exceptions
+that report a fault stack the instruction that caused it, so that the handler
+can look at it. The ones requested by an instruction, the traps, stack the
+next instruction instead.
+*/
+func (s *State) exceptionPC(vector int) uint32 {
+	switch vector {
+	case vectorIllegalInstruction, vectorPrivilegeViolation, vectorLineA, vectorLineF:
+		return s.instructionPC
+	}
+	return s.reg.getPC()
+}
+
 // processException saves the state on the supervisor stack and jumps to the
 // handler on the vector table
 func (s *State) processException(e exceptionSignal) {
@@ -105,7 +119,7 @@ func (s *State) processException(e exceptionSignal) {
 
 	sp := s.reg.getSP()
 	sp -= 4
-	s.pokeLongRaw(sp, s.reg.getPC())
+	s.pokeLongRaw(sp, s.exceptionPC(e.vector))
 	sp -= 2
 	s.pokeWordRaw(sp, uint32(sr))
 

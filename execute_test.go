@@ -145,9 +145,10 @@ func TestLineATrap(t *testing.T) {
 	if s.reg.getPC() != 0x4000 {
 		t.Errorf("The program counter is $%08x, the line A handler was not called", s.reg.getPC())
 	}
-	// The handler needs the address of the trap to know which one it was
-	if address := getLong(m, s.reg.getSP()+2); address != 0x1002 {
-		t.Errorf("The address on the frame is $%08x, it should be $1002", address)
+	// The line A traps are faults, they stack the address of the trap itself
+	// so that the handler can read the opcode and know which one it was
+	if address := getLong(m, s.reg.getSP()+2); address != 0x1000 {
+		t.Errorf("The address on the frame is $%08x, it should be $1000", address)
 	}
 }
 

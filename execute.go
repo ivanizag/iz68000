@@ -24,8 +24,9 @@ type State struct {
 	lastIrqLevel uint8
 	stopped      bool // Waiting for an interrupt after a STOP instruction
 
-	ir          uint16 // The opcode word being executed
-	extraCycles int    // Cycles added by the instruction to the ones on the table
+	ir            uint16 // The opcode word being executed
+	instructionPC uint32 // Where that opcode word was read from
+	extraCycles   int    // Cycles added by the instruction to the ones on the table
 
 	// The vector of the exception raised by the last instruction executed,
 	// or 0 if it completed
@@ -67,11 +68,11 @@ func (s *State) ExecuteInstruction() {
 		traceLine = fmt.Sprintf("%-40s", line)
 	}
 
-	pc := s.reg.getPC()
+	s.instructionPC = s.reg.getPC()
 	s.ir = s.fetchWord()
 	op := &s.opcodes[s.ir]
 	if op.action == nil {
-		panic(fmt.Sprintf("Unknown opcode $%04x at $%06x\n", s.ir, pc))
+		panic(fmt.Sprintf("Unknown opcode $%04x at $%06x\n", s.ir, s.instructionPC))
 	}
 
 	op.action(s, s.ir, op)
@@ -144,6 +145,26 @@ func (s *State) pokeWord(address uint32, value uint32) {
 func (s *State) pokeLong(address uint32, value uint32) {
 	s.pokeWord(address, value>>16)
 	s.pokeWord(address+2, value)
+}
+
+// peekSizedReversed reads the low word of a long first, the order that ADDX
+// and SUBX use on their predecrement operands. It only shows on the address
+// reported by an address error.
+func (s *State) pokeSizedReversed(address uint32, size int, value uint32) {
+	if size != sizeLong {
+		s.pokeSized(address, size, value)
+		return
+	}
+	s.pokeWord(address+2, value)
+	s.pokeWord(address, value>>16)
+}
+
+func (s *State) peekSizedReversed(address uint32, size int) uint32 {
+	if size != sizeLong {
+		return s.peekSized(address, size)
+	}
+	low := s.peekWord(address + 2)
+	return s.peekWord(address)<<16 | low
 }
 
 func (s *State) peekSized(address uint32, size int) uint32 {

@@ -7,6 +7,8 @@ Motorola 68000 emulator library for Go, with instruction level timing.
 It is being used in:
 
 - Macintosh Plus emulator [izmac](https://github.com/ivanizag/izmac)
+- Example [Motorola MC68000 Educational Computer Board](examples/tinyBasic)
+  running Tiny BASIC
 
 See the library documentation in [pkg.go.dev](https://pkg.go.dev/github.com/ivanizag/iz68000#section-documentation)
 
@@ -113,6 +115,24 @@ Both that and the exception frame details are the prefetch queue and the bus
 cycles of the real processor showing through, out of reach of an emulator with
 instruction level timing. The tests of STOP are skipped, its final states
 can't be reached by executing a single instruction.
+
+## Example machine
+
+`examples/tinyBasic` emulates the Motorola MC68000 Educational Computer Board
+of 1981, the most minimal 68000 computer there is: a processor, RAM and two
+serial ports on 6850 ACIAs. It runs Gordon Brandly's Tiny BASIC of 1985, that
+was written for that board and whose whole interface with the hardware is the
+status and data registers of the console port:
+
+```
+$10040  status, receiver ready on the bit 0, transmitter ready on the bit 1
+$10042  data
+```
+
+```sh
+cd examples/tinyBasic
+go run .
+```
 
 ## Tests
 

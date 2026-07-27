@@ -255,6 +255,64 @@ func eaTime(mode int, reg int, size int) int {
 	return 0
 }
 
+/*
+eaTimeAddress is the time of LEA and PEA, that compute an address without
+reading the operand and so don't pay for the transfer.
+*/
+func eaTimeAddress(mode int, reg int) int {
+	switch mode {
+	case modeIndirect:
+		return 0
+	case modeIndirectDisplacement:
+		return 4
+	case modeIndirectIndexed:
+		return 8
+	case modeExtended:
+		switch reg {
+		case modeExtAbsoluteShort, modeExtPCDisplacement:
+			return 4
+		case modeExtAbsoluteLong, modeExtPCIndexed:
+			return 8
+		}
+	}
+	return 0
+}
+
+/*
+eaTimeJump is the time of JMP and JSR, that prefetch from the target instead
+of reading an operand.
+*/
+func eaTimeJump(mode int, reg int) int {
+	switch mode {
+	case modeIndirect:
+		return 0
+	case modeIndirectDisplacement:
+		return 2
+	case modeIndirectIndexed:
+		return 6
+	case modeExtended:
+		switch reg {
+		case modeExtAbsoluteShort, modeExtPCDisplacement:
+			return 2
+		case modeExtAbsoluteLong:
+			return 4
+		case modeExtPCIndexed:
+			return 6
+		}
+	}
+	return 0
+}
+
+// eaTimeMovem is the time of MOVEM, like the address only one but two cycles
+// shorter on the indexed modes
+func eaTimeMovem(mode int, reg int) int {
+	if mode == modeIndirectIndexed ||
+		(mode == modeExtended && reg == modeExtPCIndexed) {
+		return 6
+	}
+	return eaTimeAddress(mode, reg)
+}
+
 // eaTimeMoveDestination is the time of the destination of MOVE, that is
 // shorter than the regular one for the predecrement mode
 func eaTimeMoveDestination(mode int, reg int, size int) int {

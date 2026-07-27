@@ -35,9 +35,9 @@ func opcodeDefs68000() []opcodeDef {
 		{name: "MOVEQ", pattern: "0111nnn0xxxxxxxx", size: sizeLong,
 			operands: operandsMoveQuick, cycles: 4, action: opMOVEQ},
 		{name: "LEA", pattern: "0100nnn111mmmrrr", size: sizeLong, ea: eaControl,
-			timing: timingEA, operands: operandsEAToAddressReg, cycles: 4, action: opLEA},
+			timing: timingAddress, operands: operandsEAToAddressReg, cycles: 4, action: opLEA},
 		{name: "PEA", pattern: "0100100001mmmrrr", size: sizeLong, ea: eaControl,
-			timing: timingEA, operands: operandsEA, cycles: 12, action: opPEA},
+			timing: timingAddress, operands: operandsEA, cycles: 12, action: opPEA},
 		{name: "EXT", pattern: "0100100010000nnn", size: sizeWord,
 			operands: operandsDataReg, cycles: 4, build: buildOpExt},
 		{name: "EXT", pattern: "0100100011000nnn", size: sizeLong,
@@ -49,57 +49,64 @@ func opcodeDefs68000() []opcodeDef {
 			Immediate to effective address
 		*/
 		{name: "ORI", pattern: "00000000ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16, rmw: true,
+			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16,
+			cyclesMemory: 12, cyclesMemoryL: 20,
 			build: buildAluImmediate(aluOr, true)},
 		{name: "ANDI", pattern: "00000010ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16, rmw: true,
+			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16,
+			cyclesMemory: 12, cyclesMemoryL: 20,
 			build: buildAluImmediate(aluAnd, true)},
 		{name: "SUBI", pattern: "00000100ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16, rmw: true,
+			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16,
+			cyclesMemory: 12, cyclesMemoryL: 20,
 			build: buildAluImmediate(aluSub, true)},
 		{name: "ADDI", pattern: "00000110ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16, rmw: true,
+			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16,
+			cyclesMemory: 12, cyclesMemoryL: 20,
 			build: buildAluImmediate(aluAdd, true)},
 		{name: "EORI", pattern: "00001010ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16, rmw: true,
+			operands: operandsImmediateToEA, cycles: 8, cyclesL: 16,
+			cyclesMemory: 12, cyclesMemoryL: 20,
 			build: buildAluImmediate(aluEor, true)},
 		{name: "CMPI", pattern: "00001100ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsImmediateToEA, cycles: 8, cyclesL: 12,
+			operands: operandsImmediateToEA, cycles: 8, cyclesL: 14, cyclesMemory: 8, cyclesMemoryL: 12,
 			build: buildAluImmediate(aluCmp, false)},
 
 		/*
 			Quick immediate. The data of 1 to 8 is encoded on the opcode.
 		*/
 		{name: "ADDQ", pattern: "0101nnn0ssmmmrrr", ea: eaAlterable, timing: timingEA,
-			operands: operandsQuickToEA, cycles: 4, cyclesL: 8, rmw: true,
-			build: buildQuick(aluAdd)},
+			operands: operandsQuickToEA, cycles: 4, cyclesL: 8, cyclesMemory: 8, cyclesMemoryL: 12,
+			cyclesAddressRegister: 8,
+			build:                 buildQuick(aluAdd)},
 		{name: "SUBQ", pattern: "0101nnn1ssmmmrrr", ea: eaAlterable, timing: timingEA,
-			operands: operandsQuickToEA, cycles: 4, cyclesL: 8, rmw: true,
-			build: buildQuick(aluSub)},
+			operands: operandsQuickToEA, cycles: 4, cyclesL: 8, cyclesMemory: 8, cyclesMemoryL: 12,
+			cyclesAddressRegister: 8,
+			build:                 buildQuick(aluSub)},
 
 		/*
 			Arithmetic and logic with a data register. The bit 8 selects the
 			direction, the bits 7-6 the size.
 		*/
-		{name: "OR", pattern: "1000nnn0ssmmmrrr", ea: eaData, timing: timingEA,
+		{name: "OR", pattern: "1000nnn0ssmmmrrr", longRegisterPenalty: true, ea: eaData, timing: timingEA,
 			operands: operandsEAToDataReg, cycles: 4, cyclesL: 6,
 			build: buildAluToRegister(aluOr, true)},
 		{name: "OR", pattern: "1000nnn1ssmmmrrr", ea: eaMemoryAlterable, timing: timingEA,
 			operands: operandsDataRegToEA, cycles: 8, cyclesL: 12,
 			build: buildAluToMemory(aluOr)},
-		{name: "AND", pattern: "1100nnn0ssmmmrrr", ea: eaData, timing: timingEA,
+		{name: "AND", pattern: "1100nnn0ssmmmrrr", longRegisterPenalty: true, ea: eaData, timing: timingEA,
 			operands: operandsEAToDataReg, cycles: 4, cyclesL: 6,
 			build: buildAluToRegister(aluAnd, true)},
 		{name: "AND", pattern: "1100nnn1ssmmmrrr", ea: eaMemoryAlterable, timing: timingEA,
 			operands: operandsDataRegToEA, cycles: 8, cyclesL: 12,
 			build: buildAluToMemory(aluAnd)},
-		{name: "SUB", pattern: "1001nnn0ssmmmrrr", ea: eaAll, timing: timingEA,
+		{name: "SUB", pattern: "1001nnn0ssmmmrrr", longRegisterPenalty: true, ea: eaAll, timing: timingEA,
 			operands: operandsEAToDataReg, cycles: 4, cyclesL: 6,
 			build: buildAluToRegister(aluSub, true)},
 		{name: "SUB", pattern: "1001nnn1ssmmmrrr", ea: eaMemoryAlterable, timing: timingEA,
 			operands: operandsDataRegToEA, cycles: 8, cyclesL: 12,
 			build: buildAluToMemory(aluSub)},
-		{name: "ADD", pattern: "1101nnn0ssmmmrrr", ea: eaAll, timing: timingEA,
+		{name: "ADD", pattern: "1101nnn0ssmmmrrr", longRegisterPenalty: true, ea: eaAll, timing: timingEA,
 			operands: operandsEAToDataReg, cycles: 4, cyclesL: 6,
 			build: buildAluToRegister(aluAdd, true)},
 		{name: "ADD", pattern: "1101nnn1ssmmmrrr", ea: eaMemoryAlterable, timing: timingEA,
@@ -109,7 +116,7 @@ func opcodeDefs68000() []opcodeDef {
 			operands: operandsEAToDataReg, cycles: 4, cyclesL: 6,
 			build: buildAluToRegister(aluCmp, false)},
 		{name: "EOR", pattern: "1011nnn1ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsDataRegToEA, cycles: 4, cyclesL: 8, rmw: true,
+			operands: operandsDataRegToEA, cycles: 4, cyclesL: 8, cyclesMemory: 8, cyclesMemoryL: 12,
 			build: buildAluToMemory(aluEor)},
 
 		/*
@@ -118,11 +125,11 @@ func opcodeDefs68000() []opcodeDef {
 		*/
 		{name: "SUBA", pattern: "1001nnn011mmmrrr", size: sizeWord, ea: eaAll, timing: timingEA,
 			operands: operandsEAToAddressReg, cycles: 8, build: buildAluAddress(aluSub, true)},
-		{name: "SUBA", pattern: "1001nnn111mmmrrr", size: sizeLong, ea: eaAll, timing: timingEA,
+		{name: "SUBA", pattern: "1001nnn111mmmrrr", longRegisterPenalty: true, size: sizeLong, ea: eaAll, timing: timingEA,
 			operands: operandsEAToAddressReg, cycles: 6, build: buildAluAddress(aluSub, true)},
 		{name: "ADDA", pattern: "1101nnn011mmmrrr", size: sizeWord, ea: eaAll, timing: timingEA,
 			operands: operandsEAToAddressReg, cycles: 8, build: buildAluAddress(aluAdd, true)},
-		{name: "ADDA", pattern: "1101nnn111mmmrrr", size: sizeLong, ea: eaAll, timing: timingEA,
+		{name: "ADDA", pattern: "1101nnn111mmmrrr", longRegisterPenalty: true, size: sizeLong, ea: eaAll, timing: timingEA,
 			operands: operandsEAToAddressReg, cycles: 6, build: buildAluAddress(aluAdd, true)},
 		{name: "CMPA", pattern: "1011nnn011mmmrrr", size: sizeWord, ea: eaAll, timing: timingEA,
 			operands: operandsEAToAddressReg, cycles: 6, build: buildAluAddress(aluCmp, false)},
@@ -133,13 +140,17 @@ func opcodeDefs68000() []opcodeDef {
 			Single operand
 		*/
 		{name: "NEGX", pattern: "01000000ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsEA, cycles: 4, cyclesL: 6, rmw: true, build: buildOpNEGX},
+			operands: operandsEA, cycles: 4, cyclesL: 6, cyclesMemory: 8, cyclesMemoryL: 12,
+			build: buildOpNEGX},
 		{name: "CLR", pattern: "01000010ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsEA, cycles: 4, cyclesL: 6, rmw: true, build: buildOpCLR},
+			operands: operandsEA, cycles: 4, cyclesL: 6, cyclesMemory: 8, cyclesMemoryL: 12,
+			build: buildOpCLR},
 		{name: "NEG", pattern: "01000100ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsEA, cycles: 4, cyclesL: 6, rmw: true, build: buildOpNEG},
+			operands: operandsEA, cycles: 4, cyclesL: 6, cyclesMemory: 8, cyclesMemoryL: 12,
+			build: buildOpNEG},
 		{name: "NOT", pattern: "01000110ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
-			operands: operandsEA, cycles: 4, cyclesL: 6, rmw: true, build: buildOpNOT},
+			operands: operandsEA, cycles: 4, cyclesL: 6, cyclesMemory: 8, cyclesMemoryL: 12,
+			build: buildOpNOT},
 		{name: "TST", pattern: "01001010ssmmmrrr", ea: eaDataAlterable, timing: timingEA,
 			operands: operandsEA, cycles: 4, build: buildOpTST},
 
@@ -148,33 +159,33 @@ func opcodeDefs68000() []opcodeDef {
 			for the static variants, from the word after the opcode.
 		*/
 		{name: "BTST", pattern: "0000nnn100mmmrrr", sizeFromMode: true, ea: eaData, timing: timingEA,
-			operands: operandsBitToEA, cycles: 6, action: buildOpBit(bitTest, false)},
+			operands: operandsBitToEA, cycles: 6, cyclesMemory: 4, action: buildOpBit(bitTest, false)},
 		{name: "BCHG", pattern: "0000nnn101mmmrrr", sizeFromMode: true, ea: eaDataAlterable, timing: timingEA,
-			operands: operandsBitToEA, cycles: 8, action: buildOpBit(bitChange, false)},
+			operands: operandsBitToEA, cycles: 6, cyclesMemory: 8, action: buildOpBit(bitChange, false)},
 		{name: "BCLR", pattern: "0000nnn110mmmrrr", sizeFromMode: true, ea: eaDataAlterable, timing: timingEA,
-			operands: operandsBitToEA, cycles: 10, action: buildOpBit(bitClear, false)},
+			operands: operandsBitToEA, cycles: 8, cyclesMemory: 8, action: buildOpBit(bitClear, false)},
 		{name: "BSET", pattern: "0000nnn111mmmrrr", sizeFromMode: true, ea: eaDataAlterable, timing: timingEA,
-			operands: operandsBitToEA, cycles: 8, action: buildOpBit(bitSet, false)},
+			operands: operandsBitToEA, cycles: 6, cyclesMemory: 8, action: buildOpBit(bitSet, false)},
 		{name: "BTST", pattern: "0000100000mmmrrr", sizeFromMode: true, ea: eaData, timing: timingEA,
-			operands: operandsBitStaticToEA, cycles: 10, action: buildOpBit(bitTest, true)},
+			operands: operandsBitStaticToEA, cycles: 10, cyclesMemory: 8, action: buildOpBit(bitTest, true)},
 		{name: "BCHG", pattern: "0000100001mmmrrr", sizeFromMode: true, ea: eaDataAlterable, timing: timingEA,
-			operands: operandsBitStaticToEA, cycles: 12, action: buildOpBit(bitChange, true)},
+			operands: operandsBitStaticToEA, cycles: 12, cyclesMemory: 12, action: buildOpBit(bitChange, true)},
 		{name: "BCLR", pattern: "0000100010mmmrrr", sizeFromMode: true, ea: eaDataAlterable, timing: timingEA,
-			operands: operandsBitStaticToEA, cycles: 14, action: buildOpBit(bitClear, true)},
+			operands: operandsBitStaticToEA, cycles: 14, cyclesMemory: 12, action: buildOpBit(bitClear, true)},
 		{name: "BSET", pattern: "0000100011mmmrrr", sizeFromMode: true, ea: eaDataAlterable, timing: timingEA,
-			operands: operandsBitStaticToEA, cycles: 12, action: buildOpBit(bitSet, true)},
+			operands: operandsBitStaticToEA, cycles: 12, cyclesMemory: 12, action: buildOpBit(bitSet, true)},
 
 		/*
 			Program control
 		*/
 		{name: "BRA", pattern: "01100000xxxxxxxx", operands: operandsBranch,
-			cycles: 10, action: buildOpBranch(condT)},
+			cycles: 8, action: buildOpBranch(condT)},
 		{name: "BSR", pattern: "01100001xxxxxxxx", operands: operandsBranch,
 			cycles: 18, action: opBSR},
 		{name: "JMP", pattern: "0100111011mmmrrr", size: sizeLong, ea: eaControl,
-			timing: timingEA, operands: operandsEA, cycles: 4, action: opJMP},
+			timing: timingJump, operands: operandsEA, cycles: 8, action: opJMP},
 		{name: "JSR", pattern: "0100111010mmmrrr", size: sizeLong, ea: eaControl,
-			timing: timingEA, operands: operandsEA, cycles: 12, action: opJSR},
+			timing: timingJump, operands: operandsEA, cycles: 16, action: opJSR},
 		{name: "RTS", pattern: "0100111001110101", operands: operandsNone,
 			cycles: 16, action: opRTS},
 		{name: "RTR", pattern: "0100111001110111", operands: operandsNone,
@@ -203,16 +214,16 @@ func opcodeDefs68000() []opcodeDef {
 			mask of the registers to move.
 		*/
 		{name: "MOVEM", pattern: "0100100010mmmrrr", size: sizeWord, ea: eaMovemToMemory,
-			timing: timingEA, operands: operandsMovemToMemory, cycles: 8,
+			timing: timingMovem, operands: operandsMovemToMemory, cycles: 8,
 			action: buildOpMOVEMToMemory(sizeWord)},
 		{name: "MOVEM", pattern: "0100100011mmmrrr", size: sizeLong, ea: eaMovemToMemory,
-			timing: timingEA, operands: operandsMovemToMemory, cycles: 8,
+			timing: timingMovem, operands: operandsMovemToMemory, cycles: 8,
 			action: buildOpMOVEMToMemory(sizeLong)},
 		{name: "MOVEM", pattern: "0100110010mmmrrr", size: sizeWord, ea: eaMovemToRegister,
-			timing: timingEA, operands: operandsMovemToReg, cycles: 12,
+			timing: timingMovem, operands: operandsMovemToReg, cycles: 12,
 			action: buildOpMOVEMToRegister(sizeWord)},
 		{name: "MOVEM", pattern: "0100110011mmmrrr", size: sizeLong, ea: eaMovemToRegister,
-			timing: timingEA, operands: operandsMovemToReg, cycles: 12,
+			timing: timingMovem, operands: operandsMovemToReg, cycles: 12,
 			action: buildOpMOVEMToRegister(sizeLong)},
 
 		/*
@@ -238,10 +249,10 @@ func opcodeDefs68000() []opcodeDef {
 			timing: timingEA, operands: operandsEAToDataReg, cycles: 38,
 			action: buildOpMultiply(true)},
 		{name: "DIVU", pattern: "1000nnn011mmmrrr", size: sizeWord, ea: eaData,
-			timing: timingEA, operands: operandsEAToDataReg, cycles: 140,
+			timing: timingEA, operands: operandsEAToDataReg,
 			action: buildOpDivide(false)},
 		{name: "DIVS", pattern: "1000nnn111mmmrrr", size: sizeWord, ea: eaData,
-			timing: timingEA, operands: operandsEAToDataReg, cycles: 158,
+			timing: timingEA, operands: operandsEAToDataReg,
 			action: buildOpDivide(true)},
 
 		/*
@@ -252,7 +263,7 @@ func opcodeDefs68000() []opcodeDef {
 		{name: "SBCD", pattern: "1000nnn10000xnnn", size: sizeByte,
 			operands: operandsExtended, cycles: 6, action: opSBCD},
 		{name: "NBCD", pattern: "0100100000mmmrrr", size: sizeByte, ea: eaDataAlterable,
-			timing: timingEA, operands: operandsEA, cycles: 6, rmw: true, action: opNBCD},
+			timing: timingEA, operands: operandsEA, cycles: 6, cyclesMemory: 8, action: opNBCD},
 
 		/*
 			Multiprecision arithmetic. The bit 3 selects between two data
@@ -271,7 +282,7 @@ func opcodeDefs68000() []opcodeDef {
 		{name: "CHK", pattern: "0100nnn110mmmrrr", size: sizeWord, ea: eaData,
 			timing: timingEA, operands: operandsEAToDataReg, cycles: 10, action: opCHK},
 		{name: "TAS", pattern: "0100101011mmmrrr", size: sizeByte, ea: eaDataAlterable,
-			timing: timingEA, operands: operandsEA, cycles: 4, rmw: true, action: opTAS},
+			timing: timingEA, operands: operandsEA, cycles: 4, cyclesMemory: 10, action: opTAS},
 		{name: "EXG", pattern: "1100nnn101000nnn", size: sizeLong, operands: operandsExg,
 			cycles: 6, action: buildOpEXG(regD0, regD0)},
 		{name: "EXG", pattern: "1100nnn101001nnn", size: sizeLong, operands: operandsExg,
@@ -284,7 +295,7 @@ func opcodeDefs68000() []opcodeDef {
 			the 68000, it became so on the 68010.
 		*/
 		{name: "MOVE", pattern: "0100000011mmmrrr", size: sizeWord, ea: eaDataAlterable,
-			timing: timingEA, operands: operandsSRToEA, cycles: 6, rmw: true,
+			timing: timingEA, operands: operandsSRToEA, cycles: 6, cyclesMemory: 8,
 			action: opMOVEfromSR},
 		{name: "MOVE", pattern: "0100010011mmmrrr", size: sizeWord, ea: eaData,
 			timing: timingEA, operands: operandsEAToCCR, cycles: 12, action: opMOVEtoCCR},
@@ -334,7 +345,7 @@ func opcodeDefs68000() []opcodeDef {
 	// Scc sets a byte to all ones or all zeros, DBcc is a loop primitive
 	defs = append(defs, conditionalDefs(opcodeDef{
 		pattern: "0101cccc11mmmrrr", size: sizeByte, ea: eaDataAlterable,
-		timing: timingEA, operands: operandsEA, cycles: 4, rmw: true,
+		timing: timingEA, operands: operandsEA, cycles: 4, cyclesMemory: 8,
 	}, "S", buildOpScc)...)
 	defs = append(defs, conditionalDefs(opcodeDef{
 		pattern: "0101cccc11001nnn", size: sizeWord, operands: operandsDbcc, cycles: 10,

@@ -80,26 +80,39 @@ that the Macintosh uses for the toolbox calls.
 
 The remaining opcode words are the encodings that are illegal on the 68000.
 
-The cycle counts are the base times of the manual plus the effective address
-calculation times. They are not exact yet for the operands on address
-registers, for some of the long variants and for the divisions, where the
-worst case is used.
+The cycle counts are verified against the suite. They follow the tables of the
+manual, with a base time per instruction that has a column for the operands on
+a register and another for the ones in memory, plus one of four effective
+address calculation tables depending on whether the instruction reads the
+operand, only computes its address, prefetches from it or is MOVEM. The times
+that depend on the data are computed at run time: the shift counts, the bits
+of MULU and MULS, the registers of MOVEM and the microcoded loops of DIVU and
+DIVS.
 
 ## Accuracy
 
-Against the whole test suite, 311787 of 315000 scenarios pass. The 3213 that
-do not fall in three groups, all of them documented on `harteSuite_test.go`:
+Against the whole test suite, with the cycle counts checked, 311278 of 315000
+scenarios pass. The 3722 that do not are all documented on
+`harteSuite_test.go`:
 
 - The V flag of ABCD, SBCD and NBCD, that the manual leaves undefined.
 - MOVE.L, ADDX.L, SUBX.L and CMPM.L aborted by an address error on their
   second operand, where which half of the long was transferred first decides
   what has already been committed.
 - Three of the seven words of the group 0 exception frame.
+- The cycles of the CHK trap and of the bit operations on the high half of a
+  data register, where the times are bimodal and the condition that picks
+  between them is not always reproduced.
 
-The last two are the prefetch queue and the bus cycles of the real processor
-showing through when an address error aborts an instruction, out of reach of
-an emulator with instruction level timing. The tests of STOP are skipped, its
-final states can't be reached by executing a single instruction.
+The cycles of an instruction aborted by an address error are not compared. It
+stops part way through, after a number of cycles that depends on the
+instruction and the addressing mode, so only a fixed approximation is charged.
+Every instruction that completes is cycle exact.
+
+Both that and the exception frame details are the prefetch queue and the bus
+cycles of the real processor showing through, out of reach of an emulator with
+instruction level timing. The tests of STOP are skipped, its final states
+can't be reached by executing a single instruction.
 
 ## Tests
 

@@ -157,6 +157,14 @@ func buildOpDivide(signed bool) opFunc {
 			s.raiseException(vectorZeroDivide)
 		}
 
+		// The division is done by a microcoded loop, its length depends on
+		// the operands
+		if signed {
+			s.extraCycles = divideSignedCycles(int32(s.reg.getD(reg)), int16(divisor))
+		} else {
+			s.extraCycles = divideUnsignedCycles(s.reg.getD(reg), divisor)
+		}
+
 		var quotient, remainder uint32
 		if signed {
 			dividend := int32(s.reg.getD(reg))
@@ -192,6 +200,76 @@ func buildOpDivide(signed bool) opFunc {
 	}
 }
 
+/*
+The time taken by the division loops, following the microcode of the MAME
+core. The counts are in microcycles, two clock cycles each.
+*/
+
+func divideUnsignedCycles(dividend uint32, divisor uint16) int {
+	if dividend>>16 >= uint32(divisor) {
+		// The overflow is detected on the first steps
+		return 10
+	}
+
+	cycles := 38
+	highDivisor := uint32(divisor) << 16
+	for i := 0; i < 15; i++ {
+		previous := dividend
+		dividend <<= 1
+		if int32(previous) < 0 {
+			dividend -= highDivisor
+		} else {
+			cycles += 2
+			if dividend >= highDivisor {
+				dividend -= highDivisor
+				cycles--
+			}
+		}
+	}
+	return 2 * cycles
+}
+
+func divideSignedCycles(dividend int32, divisor int16) int {
+	cycles := 6
+	if dividend < 0 {
+		cycles++
+	}
+
+	absDividend := absolute32(dividend)
+	absDivisor := absolute32(int32(divisor))
+	if absDividend>>16 >= absDivisor {
+		return 2 * (cycles + 2)
+	}
+
+	quotient := absDividend / absDivisor
+	cycles += 55
+	if divisor >= 0 {
+		if dividend >= 0 {
+			cycles--
+		} else {
+			cycles++
+		}
+	}
+
+	// Count the leading zeros of the absolute quotient
+	for i := 0; i < 15; i++ {
+		if int16(quotient) >= 0 {
+			cycles++
+		}
+		quotient <<= 1
+	}
+	return 2 * cycles
+}
+
+// absolute32 works for the most negative value too, its absolute value wraps
+// to the same bits and those are the ones used
+func absolute32(v int32) uint32 {
+	if v < 0 {
+		return uint32(-v)
+	}
+	return uint32(v)
+}
+
 // divideOverflow aborts a division whose quotient does not fit on a word. The
 // destination is left untouched and N, documented as undefined, is set.
 func (s *State) divideOverflow() {
@@ -214,6 +292,7 @@ func (s *State) bcdOperands(ir uint16) (uint32, uint32, operand) {
 	}
 
 	// The predecrement variant, the source is resolved first
+	s.extraCycles += 12
 	srcOperand := s.resolveOperand(modeIndirectPredecrement, eaReg(ir), sizeByte)
 	src := s.readOperand(&srcOperand, sizeByte)
 	dstOperand := s.resolveOperand(modeIndirectPredecrement, opReg(ir), sizeByte)
@@ -308,6 +387,11 @@ func buildOpExtended(add bool, size int) opFunc {
 		zero := s.reg.getFlag(flagZ)
 		extend := s.reg.getFlagBit(flagX)
 
+		if ir&0x0008 != 0 {
+			// The predecrement variants pay for four extra bus cycles
+			s.extraCycles += pick(size == sizeLong, 22, 14)
+		}
+
 		var src, dst uint32
 		var dstOperand operand
 		switch {
@@ -382,6 +466,9 @@ func opCHK(s *State, ir uint16, op *opcode) {
 	s.reg.updateFlag(flagN, value < 0)
 
 	if value < 0 {
+		// The trap of the negative case is two cycles longer. This is only an
+		// approximation, the real split is not always on the sign.
+		s.extraCycles += 2
 		s.raiseException(vectorChk)
 	}
 	if value > bound {

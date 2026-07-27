@@ -338,6 +338,12 @@ func buildOpBit(operation int, static bool) opFunc {
 		}
 		bit &= uint32(size)*8 - 1
 
+		if !static && operation != bitTest && size == sizeLong && bit > 15 {
+			// Reaching the high half of a data register takes two more cycles.
+			// The static variants have it folded on their base time.
+			s.extraCycles += 2
+		}
+
 		dst := s.resolveOperand(mode, eaReg(ir), size)
 		value := s.readOperand(&dst, size)
 		s.reg.updateFlag(flagZ, value&(1<<bit) == 0)
@@ -613,7 +619,12 @@ func opJSR(s *State, ir uint16, op *opcode) {
 	// after the extension words. An odd target is detected before pushing, it
 	// must leave the stack pointer where it was.
 	dst := s.resolveOperand(eaMode(ir), eaReg(ir), sizeLong)
-	s.checkJumpTarget(dst.address)
+	if dst.address&1 != 0 {
+		// Detected before pushing, so the instruction is aborted rather than
+		// completed like on the other jumps
+		s.reg.setPC(dst.address)
+		s.raiseAddressError(dst.address, false)
+	}
 	s.push(s.reg.getPC(), sizeLong)
 	s.jump(dst.address)
 }

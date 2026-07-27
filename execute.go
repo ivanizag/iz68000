@@ -32,6 +32,14 @@ type State struct {
 	// or 0 if it completed
 	lastExceptionVector int
 
+	// True when that exception was an address error that aborted the
+	// instruction, whose cycle count is then only an approximation
+	lastExceptionAborted bool
+
+	// The cycle count before the current instruction, to charge an aborted
+	// one with only the part of it that ran
+	instructionStartCycles uint64
+
 	lastResolvedAddress uint32
 }
 
@@ -40,6 +48,7 @@ type opcode struct {
 	size     int
 	operands int
 	cycles   int
+	eaCycles int // The part of cycles spent calculating the effective address
 	action   opFunc
 }
 
@@ -55,6 +64,8 @@ func (s *State) ExecuteInstruction() {
 	}
 	s.lastIrqLevel = s.irqLevel
 	s.lastExceptionVector = 0
+	s.lastExceptionAborted = false
+	s.extraCycles = 0
 
 	if s.stopped {
 		// The STOP instruction waits for an interrupt to resume
@@ -75,9 +86,12 @@ func (s *State) ExecuteInstruction() {
 		panic(fmt.Sprintf("Unknown opcode $%04x at $%06x\n", s.ir, s.instructionPC))
 	}
 
+	// The base time is counted before executing, so that an instruction
+	// aborted by an exception can be charged for only part of it
+	s.instructionStartCycles = s.cycles
+	s.cycles += uint64(op.cycles)
 	op.action(s, s.ir, op)
-	s.cycles += uint64(op.cycles + s.extraCycles)
-	s.extraCycles = 0
+	s.cycles += uint64(s.extraCycles)
 
 	if s.trace {
 		fmt.Printf("%s %v\n", traceLine, s.reg)
@@ -96,6 +110,7 @@ func (s *State) recoverException() {
 	if !ok {
 		panic(r)
 	}
+	s.chargeExceptionCycles(e)
 	s.processException(e)
 }
 
@@ -218,7 +233,7 @@ func (s *State) fetchLong() uint32 {
 func (s *State) checkJumpTarget(address uint32) {
 	if address&1 != 0 {
 		s.reg.setPC(address)
-		s.raiseAddressError(address, false)
+		s.raiseJumpError(address)
 	}
 }
 

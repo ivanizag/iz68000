@@ -14,16 +14,26 @@ package iz68000
 	decode.py script of the repo.
 
 	Know issues:
-		- The cycle counts are not verified yet (Note 1)
+		- The cycles of the instructions aborted by an address error (Note 1)
 		- Part of the frame pushed by the group 0 exceptions (Note 2)
 		- MOVE.L, ADDX.L, SUBX.L and CMPM.L aborted by an address error on
 		  their second operand (Note 3)
 		- The tests of STOP are skipped (Note 4)
 		- The N and V flags of ABCD, SBCD and NBCD (Note 5)
+		- The cycles of the CHK trap and of some bit operations (Note 6)
+
+	Note 1: an address error aborts the instruction part way through, after a
+	number of cycles that depends on the instruction and on the addressing
+	mode. Only a fixed approximation is charged, so those cycle counts are not
+	compared. Everything else is.
 
 	Notes 2 and 3 are both the prefetch queue and the bus cycles of the real
 	processor showing through when an address error aborts an instruction. An
 	emulator with instruction level timing can't reproduce them.
+
+	Note 6: the trap of CHK takes 38 or 40 cycles, and the bit operations on a
+	data register two more for the high bit numbers. The condition that picks
+	between them is not the one used here on every case.
 
 	Note 5: the manual leaves N and V undefined for the decimal instructions,
 	the V here does not always agree with the microcode of MAME. A handful of
@@ -45,7 +55,7 @@ import (
 
 var ProcessorTestsEnable = false
 var ProcessorTestsPath = "../m68000-tests/v1/"
-var ProcessorTestsCheckCycles = false      // Note 1
+var ProcessorTestsCheckCycles = true       // Note 1
 var ProcessorTestsCheckExceptionPC = false // Note 2
 
 /*
@@ -190,7 +200,7 @@ func testScenario(t *testing.T, s *State, sc *scenario) {
 		}
 	}
 
-	if ProcessorTestsCheckCycles {
+	if ProcessorTestsCheckCycles && !s.lastExceptionAborted { // Note 1
 		cycles := int(s.GetCycles() - start)
 		if cycles != sc.cycles {
 			t.Errorf("Took %v cycles, it should be %v for %s", cycles, sc.cycles, sc)

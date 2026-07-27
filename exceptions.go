@@ -34,6 +34,10 @@ type exceptionSignal struct {
 	address uint32 // The address that failed on the address and bus errors
 	write   bool
 	ir      uint16
+
+	// True when the instruction had already done its work and it was the
+	// prefetch from a bad jump target that failed
+	afterInstruction bool
 }
 
 func (s *State) raiseException(vector int) {
@@ -48,6 +52,17 @@ func (s *State) raiseAddressError(address uint32, write bool) {
 		address: address,
 		write:   write,
 		ir:      s.ir,
+	})
+}
+
+// raiseJumpError is the address error of a prefetch from an odd target, that
+// happens once the instruction has already been executed
+func (s *State) raiseJumpError(address uint32) {
+	panic(exceptionSignal{
+		vector:           vectorAddressError,
+		address:          address,
+		ir:               s.ir,
+		afterInstruction: true,
 	})
 }
 
@@ -74,8 +89,7 @@ func statusWord(e exceptionSignal, sr uint16) uint32 {
 	return status
 }
 
-// The approximate cost of the exception processing. Note that the manual
-// counts the cycles from the last cycle of the aborted instruction.
+// The cost of the exception processing itself
 func exceptionCycles(vector int) int {
 	switch vector {
 	case vectorBusError, vectorAddressError:
@@ -83,11 +97,46 @@ func exceptionCycles(vector int) int {
 	case vectorZeroDivide:
 		return 38
 	case vectorChk:
-		return 40
-	case vectorTrapv:
-		return 34
+		return 38
 	}
 	return 34
+}
+
+/*
+The cycles charged to an instruction aborted by an address error. The real
+value is however far the instruction had got when the access failed, from 8 to
+20 cycles depending on the instruction and the addressing mode. Reproducing it
+needs the bus cycle detail that this emulator does not model.
+*/
+const abortedInstructionCycles = 8
+
+/*
+chargeExceptionCycles fixes the cycle count of the instruction that raised the
+exception. The manual gives a single total for each one:
+
+  - The traps and the faults that don't reach the bus, like the privilege
+    violations, cost only the exception processing.
+  - An address error on an operand aborts the instruction on the bus cycle
+    that failed, only that much of it is charged.
+  - An address error on a jump target happens once the instruction is done,
+    so it is charged in full.
+*/
+func (s *State) chargeExceptionCycles(e exceptionSignal) {
+	group0 := e.vector == vectorBusError || e.vector == vectorAddressError
+	switch {
+	case e.vector == vectorChk:
+		// The bound was read and compared before the trap was decided
+		s.cycles = s.instructionStartCycles +
+			uint64(s.opcodes[s.ir].eaCycles+s.extraCycles)
+	case !group0:
+		s.cycles = s.instructionStartCycles
+	case !e.afterInstruction:
+		s.lastExceptionAborted = true
+		s.cycles = s.instructionStartCycles + abortedInstructionCycles
+	default:
+		s.cycles += uint64(s.extraCycles)
+	}
+	s.cycles += uint64(exceptionCycles(e.vector))
 }
 
 /*
@@ -136,7 +185,6 @@ func (s *State) processException(e exceptionSignal) {
 
 	s.reg.setSP(sp)
 	s.reg.setPC(s.peekLong(uint32(e.vector) * 4))
-	s.cycles += uint64(exceptionCycles(e.vector))
 }
 
 // SetIRQ sets the level of the interrupt request lines, from 0 for no
@@ -171,5 +219,5 @@ func (s *State) processInterrupt(level uint8) {
 	s.stopped = false
 	s.processException(exceptionSignal{vector: vectorAutovector + int(level) - 1})
 	s.reg.setInterruptMask(level)
-	s.cycles += 10 // The interrupt acknowledge cycle
+	s.cycles += 44 // The exception processing and the interrupt acknowledge
 }

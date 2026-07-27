@@ -25,9 +25,12 @@ const (
 
 // How the effective address calculation times are added to the base time
 const (
-	timingFixed = iota
-	timingEA
-	timingMove
+	timingFixed   = iota
+	timingEA      // The regular table, it includes reading the operand
+	timingMove    // Source plus the shorter destination times of MOVE
+	timingAddress // LEA and PEA, that only compute the address
+	timingJump    // JMP and JSR, that prefetch from the target
+	timingMovem   // MOVEM, shorter than timingAddress on the indexed modes
 )
 
 // opcodeDef describes a family of opcodes sharing the same action
@@ -43,9 +46,21 @@ type opcodeDef struct {
 	timing   int
 	operands int
 
-	cycles  int  // Base cycles for byte and word
-	cyclesL int  // Base cycles for long, defaults to cycles
-	rmw     bool // Add 4 cycles when the destination is in memory
+	/*
+		The manual gives a different base time for the operands on a register
+		and for the ones in memory, the second one covering the extra bus
+		cycles of reading and writing them back. The long columns default to
+		the byte and word ones.
+	*/
+	cycles                int
+	cyclesL               int
+	cyclesMemory          int
+	cyclesMemoryL         int
+	cyclesAddressRegister int
+
+	// The long operations that take 2 cycles more when the source is on a
+	// register or immediate, as noted on the timing tables
+	longRegisterPenalty bool
 
 	action opFunc           // For the instructions without variants
 	build  func(int) opFunc // For the instructions with a size variant
@@ -120,6 +135,7 @@ func registerOpcode(ops *[65536]opcode, def *opcodeDef, ir uint16,
 	if size == sizeLong && def.cyclesL != 0 {
 		cycles = def.cyclesL
 	}
+	eaCycles := 0
 
 	if hasEA {
 		mode, reg := eaMode(ir), eaReg(ir)
@@ -130,11 +146,32 @@ func registerOpcode(ops *[65536]opcode, def *opcodeDef, ir uint16,
 		if size == sizeByte && mode == modeAddressRegister {
 			return
 		}
-		if def.timing != timingFixed {
-			cycles += eaTime(mode, reg, size)
+
+		onRegister := mode == modeDataRegister || mode == modeAddressRegister
+		if mode == modeAddressRegister && def.cyclesAddressRegister != 0 {
+			cycles = def.cyclesAddressRegister
+		} else if !onRegister && def.cyclesMemory != 0 {
+			cycles = def.cyclesMemory
+			if size == sizeLong && def.cyclesMemoryL != 0 {
+				cycles = def.cyclesMemoryL
+			}
 		}
-		if def.rmw && mode != modeDataRegister && mode != modeAddressRegister {
-			cycles += 4
+
+		switch def.timing {
+		case timingEA, timingMove:
+			eaCycles = eaTime(mode, reg, size)
+		case timingAddress:
+			eaCycles = eaTimeAddress(mode, reg)
+		case timingJump:
+			eaCycles = eaTimeJump(mode, reg)
+		case timingMovem:
+			eaCycles = eaTimeMovem(mode, reg)
+		}
+		cycles += eaCycles
+
+		immediate := mode == modeExtended && reg == modeExtImmediate
+		if def.longRegisterPenalty && size == sizeLong && (onRegister || immediate) {
+			cycles += 2
 		}
 	}
 
@@ -169,6 +206,7 @@ func registerOpcode(ops *[65536]opcode, def *opcodeDef, ir uint16,
 		size:     size,
 		operands: def.operands,
 		cycles:   cycles,
+		eaCycles: eaCycles,
 		action:   action,
 	}
 }

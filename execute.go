@@ -83,7 +83,12 @@ func (s *State) ExecuteInstruction() {
 	s.ir = s.fetchWord()
 	op := &s.opcodes[s.ir]
 	if op.action == nil {
-		panic(fmt.Sprintf("Unknown opcode $%04x at $%06x\n", s.ir, s.instructionPC))
+		// A word that decodes to nothing on the 68000 is an illegal
+		// instruction, not a reason to stop. The bit patterns taken by
+		// the later processors land here, and software uses that on
+		// purpose: the Macintosh ROM finds out which processor it is
+		// running on by executing a MOVEC, $4e7b, and catching this.
+		s.raiseException(vectorIllegalInstruction)
 	}
 
 	// The base time is counted before executing, so that an instruction
@@ -315,6 +320,24 @@ func (s *State) SetPC(pc uint32) {
 // IsSupervisor tells if the processor is in supervisor mode
 func (s *State) IsSupervisor() bool {
 	return s.reg.isSupervisor()
+}
+
+// GetD returns a data register, from D0 to D7. The Macintosh power on tests
+// leave their result on D6 and D7, which is how an emulator can report what
+// the Sad Mac shows without rendering it.
+func (s *State) GetD(i int) uint32 {
+	return s.reg.getD(i)
+}
+
+// GetA returns an address register, from A0 to A7. A7 is the stack pointer
+// of the mode the processor is in.
+func (s *State) GetA(i int) uint32 {
+	return s.reg.getA(i)
+}
+
+// GetSR returns the status register
+func (s *State) GetSR() uint16 {
+	return s.reg.getSR()
 }
 
 // Save saves the CPU state (registers and cycle counter)

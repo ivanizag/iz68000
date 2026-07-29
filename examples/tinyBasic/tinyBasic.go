@@ -8,6 +8,9 @@ serial ports on 6850 ACIAs.
 Tiny BASIC runs from RAM and only uses the console port, so the ROM and the
 second port are not needed here. Tutor would load it and start it with its GO
 command, the reset vectors do the same job.
+
+https://en.wikipedia.org/wiki/Motorola_68000_Educational_Computer_Board
+https://en.wikipedia.org/wiki/Tiny_BASIC
 */
 
 import (

@@ -18,6 +18,24 @@ type Memory interface {
 	PeekCode(address uint32) uint8
 }
 
+/*
+ResetLine can be implemented by a Memory to be told when the RESET instruction
+asserts the reset line of the board. The 68000 asserts the line for 124 clocks
+and carries on with the next instruction: the processor itself is not reset,
+and what the line does to the rest of the board is the board's business. On a
+Macintosh Plus, for one, the machine starts again.
+
+ResetDevices is called from inside ExecuteInstruction, before it returns. A
+board that resets the processor as well, with Reset(), should note that it
+has to and do it once the instruction has returned.
+
+A Memory that does not implement it is not told, and RESET does nothing but
+take its time, as it always has.
+*/
+type ResetLine interface {
+	ResetDevices()
+}
+
 func getWord(m Memory, address uint32) uint16 {
 	return uint16(m.Peek(address))<<8 | uint16(m.Peek(address+1))
 }

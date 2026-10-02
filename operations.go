@@ -680,6 +680,9 @@ func opNOP(s *State, ir uint16, op *opcode) {
 func opRESET(s *State, ir uint16, op *opcode) {
 	s.requireSupervisor()
 	// The external devices are reset, the processor state is not affected
+	if line, ok := s.mem.(ResetLine); ok {
+		line.ResetDevices()
+	}
 }
 
 func opSTOP(s *State, ir uint16, op *opcode) {

@@ -243,3 +243,88 @@ func TestOpcodeTableCoverage(t *testing.T) {
 		t.Errorf("Only %d opcode words are implemented", implemented)
 	}
 }
+
+// resetLineMemory is a memory that counts how many times the RESET
+// instruction asserted the reset line
+type resetLineMemory struct {
+	sparseMemory
+	resets int
+}
+
+func (m *resetLineMemory) ResetDevices() {
+	m.resets++
+}
+
+func buildResetLineCPU(program []uint16) (*State, *resetLineMemory) {
+	m := &resetLineMemory{}
+	m.reset()
+	s := NewM68000(m)
+
+	setLong(m, vectorResetSSP*4, 0x8000)
+	setLong(m, vectorResetPC*4, 0x1000)
+	for i, word := range program {
+		setWord(m, 0x1000+uint32(2*i), word)
+	}
+
+	s.Reset()
+	return s, m
+}
+
+func TestResetAssertsTheResetLine(t *testing.T) {
+	s, m := buildResetLineCPU([]uint16{
+		0x7005, // MOVEQ #5,D0
+		0x4e70, // RESET
+		0x4e71, // NOP
+	})
+
+	s.ExecuteInstruction()
+	before := s.GetCycles()
+	s.ExecuteInstruction()
+
+	if m.resets != 1 {
+		t.Errorf("The reset line was asserted %v times, it should be once", m.resets)
+	}
+	// It takes the 124 clocks the line is held for and the rest of the
+	// instruction
+	if cycles := s.GetCycles() - before; cycles != 132 {
+		t.Errorf("RESET took %v cycles, it should take 132", cycles)
+	}
+	// And the processor carries on where it was, with its registers as they
+	// were
+	if s.reg.getPC() != 0x1004 {
+		t.Errorf("The program counter is $%08x, it should be $1004", s.reg.getPC())
+	}
+	if s.GetD(0) != 5 {
+		t.Errorf("D0 is %v after RESET, it should be 5", s.GetD(0))
+	}
+}
+
+func TestResetInUserModeDoesNotAssertTheLine(t *testing.T) {
+	s, m := buildResetLineCPU([]uint16{
+		0x4e70, // RESET
+	})
+	setLong(m, vectorPrivilegeViolation*4, 0x5000)
+
+	// Leave the supervisor mode
+	s.reg.setSR(0)
+	s.ExecuteInstruction()
+
+	if s.reg.getPC() != 0x5000 {
+		t.Errorf("The program counter is $%08x, the privilege violation handler was not called", s.reg.getPC())
+	}
+	if m.resets != 0 {
+		t.Errorf("The reset line was asserted %v times from user mode, it should not be", m.resets)
+	}
+}
+
+func TestResetWithAMemoryWithNoResetLine(t *testing.T) {
+	s, _ := buildTestCPU([]uint16{
+		0x4e70, // RESET
+	})
+
+	s.ExecuteInstruction()
+
+	if s.reg.getPC() != 0x1002 {
+		t.Errorf("The program counter is $%08x, it should be $1002", s.reg.getPC())
+	}
+}

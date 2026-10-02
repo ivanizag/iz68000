@@ -37,6 +37,28 @@ func main() {
 }
 ```
 
+## The reset line
+
+The RESET instruction asserts the reset line of the board and leaves the
+processor as it was. A memory that also implements `ResetLine` is told when
+that happens, and the board decides what the line does:
+
+```go
+type board struct {
+	*iz68000.FlatMemory
+	resetPending bool
+}
+
+// ResetDevices is called while RESET executes
+func (b *board) ResetDevices() {
+	b.resetPending = true
+}
+```
+
+It is called from inside `ExecuteInstruction`, so a board that resets the
+processor too should do it once the instruction has returned. A memory that
+does not implement it is not told.
+
 ## Status
 
 All the MC68000 instructions are implemented, 82% of the 65536 opcode words:
